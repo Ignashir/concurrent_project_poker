@@ -11,6 +11,8 @@ class ActionType(Enum):
     BET = 4
     RAISE = 5
     ALL_IN = 6
+    SMALL_BLIND = 7
+    BIG_BLIND = 8
 
 class CardSuit(Enum):
     HEARTS = 1

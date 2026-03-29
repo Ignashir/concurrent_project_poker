@@ -11,8 +11,10 @@ from poker.utils.errors import InvalidActionError
 
 class Game:
     STARTING_CHIPS = 1000
-    def __init__(self, num_players: int):
-        self._game_state = GameState(num_players, self.STARTING_CHIPS, 0, [], 0, 0)
+    SMALL_BLIND = 10
+    BIG_BLIND = 20
+    def __init__(self, players: List[Player]):
+        self._game_state = GameState(players, self.STARTING_CHIPS, 0, [], 0, 0)
         self._card_deck = CardDeck()
 
     def clean_state(self):
@@ -43,7 +45,6 @@ class Game:
         # Deal hole cards to each player
         for player_id in range(len(self.players)):
             self.players[player_id].is_playing = True
-            self.players[player_id].update_game_state(self.game_state.get_game_state)
             for _ in range(2):  # Deal 2 hole cards to each player
                 self.players[player_id].take_card(self.card_deck.deal_card())
 
@@ -66,17 +67,24 @@ class Game:
             case ActionType.FOLD:
                 return True  # Folding is always valid
             case ActionType.CHECK:
-                return self.game_state.current_bet == player.my_current_bet  # Can only check if there is no current bet
+                return self.current_bet == player.my_current_bet  # Can only check if there is no current bet
             case ActionType.CALL:
-                return player.my_current_bet < self.game_state.current_bet and \
-                       player.chips >= (self.game_state.current_bet - player.my_current_bet)  # Can only call if there is a current bet and player has enough chips
-            case ActionType.BET:
-                return self.game_state.current_bet == 0 and player.chips > 0
+                return player.my_current_bet < self.current_bet and \
+                       player.chips >= (self.current_bet - player.my_current_bet)  # Can only call if there is a current bet and player has enough chips
             case ActionType.RAISE:
-                return player.chips > (self.game_state.current_bet - player.my_current_bet)  # Can only raise if player has enough chips to at least call
+                return player.chips > (self.current_bet - player.my_current_bet)  # Can only raise if player has enough chips to at least call
             case ActionType.ALL_IN:
-                return True  # All-in is always valid
+                return player.chips > 0  # Can go all-in if player has any chips left
+            case ActionType.SMALL_BLIND | ActionType.BIG_BLIND:
+                return True if self.blinds_posting else False  # Blinds can only be posted during the initial betting round
         return False
+
+    def apply_raise(self, player: Player, amount: int):
+        player.chips -= amount
+        player.my_current_bet += amount
+        self.pot += amount
+        if player.my_current_bet > self.current_bet:
+            self.current_bet = player.my_current_bet
 
     def apply_action(self, player: Player, action: Action):
         if not self.validate_action(player, action):
@@ -85,25 +93,36 @@ class Game:
             case ActionType.FOLD:
                 player.is_playing = False
             case ActionType.CHECK:
-                player.check()
+                pass  # No chips are moved for a check
             case ActionType.CALL:
-                player.call()
+                difference = self.current_bet - player.my_current_bet
+                self.apply_raise(player, difference)
             case ActionType.RAISE:
-                player.raise_bet()
+                self.apply_raise(player, action.amount)
             case ActionType.ALL_IN:
-                player.all_in()
+                all_in_amount = player.chips
+                self.apply_raise(player, all_in_amount)
+            case ActionType.SMALL_BLIND:
+                amount = min(self.SMALL_BLIND, player.chips)
+                self.apply_raise(player, amount)
+            case ActionType.BIG_BLIND:
+                amount = min(self.BIG_BLIND, player.chips)
+                self.apply_raise(player, amount)
 
     def betting_round(self):
         for _ in range(len(self.players)):
             current_player = self.get_next_player()
-
-            try:
-                print(self.game_state.get_game_state['pot'])
-                print(self.game_state.get_game_state['community_cards'])
-                print(self.game_state.get_game_state['current_bet'])
-                self._game_state.from_dict(current_player.take_action(self.game_state.get_game_state))
-            except InvalidActionError as invalid:
-                print(f"Error: {invalid}")
+            while True:
+                try:
+                    print(f"Pot: {self.game_state.get_game_state['pot']}")
+                    print(f"Community Cards: {self.game_state.get_game_state['community_cards']}")
+                    print(f"Current Bet: {self.game_state.get_game_state['current_bet']}")
+                    action = current_player.take_action(self.game_state.get_game_state)
+                    self.apply_action(current_player, action)
+                    print(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
+                    break  # Exit the loop if action is successfully applied
+                except InvalidActionError as invalid:
+                    print(f"Error: {invalid}")
 
     def reveal_community_cards(self, betting_round: BettingRound):
         match betting_round:
@@ -135,15 +154,21 @@ class Game:
 
     def perform_initial_bets(self):
         # Perform initial bets (small blind and big blind)
-        small_blind_position = (self.game_state.starting_position) % len(self.players)
-        big_blind_position = (self.game_state.starting_position + 1) % len(self.players)
+        small_blind_position = self.game_state.starting_position % len(self.players)
+        big_blind_position = (small_blind_position + 1) % len(self.players)
 
-        self.players[small_blind_position].update_game_state(self.game_state.get_game_state)  # Update game state before betting
-        self._game_state.from_dict(self.players[small_blind_position].bet())  # Small blind
-        self.players[big_blind_position].update_game_state(self.game_state.get_game_state)  # Update game state before betting
-        self._game_state.from_dict(self.players[big_blind_position].bet())    # Big blind
+        small_blind_player = self.players[small_blind_position]
+        big_blind_player = self.players[big_blind_position]
+        
+        self.blinds_posting = True
+        self.apply_action(small_blind_player, Action(ActionType.SMALL_BLIND, self.SMALL_BLIND))
+        self.apply_action(big_blind_player, Action(ActionType.BIG_BLIND, self.BIG_BLIND))
+        self.blinds_posting = False
 
-    def run_single_game(self):
+        # Set who starts (player after big blind)
+        self._game_state.current_player_index = (big_blind_position + 1) % len(self.players)
+
+    def run_single_game(self) -> Player:
         # Reset game state
         self.start_game()
         # Perform first 2 bets
@@ -156,7 +181,7 @@ class Game:
             self.reveal_community_cards(betting_round)
         # Determine winner
         winner = self.determine_winner()
-        print(f"The winner is: {winner.name} with hand strength: {winner.hand.evaluate_hand(self.community_cards)[0].name}")
+        return winner
 
     # def run(self):
     #     self.start_game(len(self.players))
@@ -178,7 +203,27 @@ class Game:
     @property
     def pot(self):
         return self._game_state.pot
+
+    @pot.setter
+    def pot(self, amount):
+        self._game_state.pot = amount
     
+    @property
+    def current_bet(self):
+        return self._game_state.current_bet
+
+    @current_bet.setter
+    def current_bet(self, amount):
+        self._game_state.current_bet = amount
+
     @property
     def community_cards(self):
         return self._game_state.community_cards
+
+    @property
+    def blinds_posting(self):
+        return self._game_state.blinds_posting
+    
+    @blinds_posting.setter
+    def blinds_posting(self, value: bool):
+        self._game_state.blinds_posting = value
