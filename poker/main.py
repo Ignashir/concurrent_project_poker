@@ -2,17 +2,17 @@ import argparse
 
 from poker.game.game import Game
 from poker.player.console_player import ConsolePlayer
+from poker.runners.console_runner import ConsoleRunner
+from poker.runners.runner import Runner
 
-def console_main():
+def console_main() -> Runner:
     num_players = int(input("Enter the number of players: "))
     players = ConsolePlayer.create_players(num_players, Game.STARTING_CHIPS)
     game = Game(players)
-    game.run_single_game()
+    runner = ConsoleRunner(game)
+    return runner
 
-def network_main():
-    pass
-
-def test_main():
+def network_main() -> Runner:
     pass
 
 
@@ -22,13 +22,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.mode == 'console':
-        console_main()
+        runner = console_main()
     elif args.mode == 'network':
-        network_main()
-    elif args.mode == 'test':
-        test_main()
+        runner = network_main()
     else:
         print("Invalid mode selected. Please choose 'console' or 'network'.")
+    
+    runner.run()
 
 
 
