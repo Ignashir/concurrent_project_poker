@@ -6,13 +6,13 @@ from poker.game_logic.card import Card
 
 
 class GameState:
-    def __init__(self, players: List[Player], pot: int, community_cards: List[Card], current_bet: int, starting_position: int):
+    def __init__(self, players: List[Player]):
         self._players = players
-        self._pot = pot
-        self._community_cards = community_cards
-        self._current_bet = current_bet
-        self._starting_position = starting_position
-        self._current_player_index = starting_position
+        self._pot = 0
+        self._community_cards: List[Card] = []
+        self._current_bet = 0
+        self._starting_position = 0
+        self._current_player_index = 0
         self.initial_bets = False
 
     def from_dict(self, state_dict):
@@ -24,9 +24,9 @@ class GameState:
         self._current_player_index = state_dict.get('current_player_index', self._starting_position)
         self.initial_bets = state_dict.get('initial_bets', False)
 
-    def reset_state(self, num_players: int, starting_chips: int):
-        self._players = Player.create_players(num_players, starting_chips)
-        self._starting_position = random.randint(0, num_players - 1)
+    def reset_state(self):
+        (player.reset_hand() for player in self._players)
+        self._starting_position = random.randint(0, len(self._players) - 1)
         self._pot = 0
         self._community_cards = []
         self._current_bet = 0

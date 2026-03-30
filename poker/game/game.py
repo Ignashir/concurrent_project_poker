@@ -14,12 +14,12 @@ class Game:
     SMALL_BLIND = 10
     BIG_BLIND = 20
     def __init__(self, players: List[Player]):
-        self._game_state = GameState(players, self.STARTING_CHIPS, 0, [], 0, 0)
+        self._game_state = GameState(players)
         self._card_deck = CardDeck()
 
     def clean_state(self):
         """Reset the game state for a new game."""
-        self._game_state.reset_state(len(self.players), self.STARTING_CHIPS)
+        self._game_state.reset_state()
         self._card_deck.reset_deck()
 
     def start_game(self):
@@ -117,6 +117,8 @@ class Game:
                     print(f"Pot: {self.game_state.get_game_state['pot']}")
                     print(f"Community Cards: {self.game_state.get_game_state['community_cards']}")
                     print(f"Current Bet: {self.game_state.get_game_state['current_bet']}")
+                    print(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}")
+                    print(f"Your hand: {current_player.hand.cards}")
                     action = current_player.take_action(self.game_state.get_game_state)
                     self.apply_action(current_player, action)
                     print(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")

@@ -59,6 +59,7 @@ class Player(ABC):
         self._is_playing = value
 
     @staticmethod
+    @abstractmethod
     def create_players(num_players: int, starting_chips: int) -> List[Self]:
         if num_players < 2 or num_players > 10:
             raise ValueError("Number of players must be between 2 and 10.")
