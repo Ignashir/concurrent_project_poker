@@ -42,10 +42,10 @@ class Game:
         while avoid_infinite_loop_counter < len(self.players):
             player = self.players[current_position]
             if player.is_playing and player.chips > 0:
-                self.game_state.current_player_index = (current_position + 1) % len(self.players)
+                self._game_state.current_player_index = (current_position + 1) % len(self.players)
                 return player
             current_position = (current_position + 1) % len(self.players)
-            avoid_infinite_loop_counter += 1
+            avoid_infinite_loop_counter += 1   
         return None
 
     def validate_action(self, player: Player, action: Action) -> bool:
@@ -60,7 +60,13 @@ class Game:
                     and player.chips >= (self.current_bet - player.my_current_bet)
                 )
             case ActionType.RAISE:
-                return player.chips > (self.current_bet - player.my_current_bet)
+                if action.amount is None or action.amount <= 0:
+                    return False
+                new_total_bet = player.my_current_bet + action.amount
+                return (
+                    player.chips >= action.amount 
+                    and new_total_bet > self.current_bet
+                )
             case ActionType.ALL_IN:
                 return player.chips > 0
             case ActionType.SMALL_BLIND | ActionType.BIG_BLIND:
@@ -98,28 +104,48 @@ class Game:
                 self.apply_raise(player, amount)
 
     def betting_round(self):
-        players_to_act = list(self.active_players())
-        for _ in range(len(players_to_act)):
-            if len(self.active_players()) <= 1:
-                break
-            current_player = self.get_next_player()
+        to_act = {p.name for p in self.active_players() if p.chips > 0}
+        
+        if len(to_act) <= 1:
+            return
 
-            if current_player is None:
-                break
-            
+        while to_act:
+            current_player = self.get_next_player()
+            if current_player is None or current_player.name not in to_act:
+                if not any(name in to_act for name in [p.name for p in self.active_players()]):
+                    break
+                continue
+
             while True:
                 try:
-                    print(f"Pot: {self.game_state.get_game_state['pot']}")
-                    print(f"Community Cards: {self.game_state.get_game_state['community_cards']}")
-                    print(f"Current Bet: {self.game_state.get_game_state['current_bet']}")
-                    print(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}")
-                    print(f"Your hand: {current_player.hand.cards}")
-                    action = current_player.take_action(self.game_state.get_game_state)
+                    state = self.game_state.get_game_state
+                    print(f"\nPot: {state['pot']} | Community: {state['community_cards']}")
+                    print(f"Current Bet: {state['current_bet']}")
+                    print(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})")
+                    old_bet = self.current_bet
+                    
+                    action = current_player.take_action(state)
                     self.apply_action(current_player, action)
-                    print(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
+                    
+                    print(f"{current_player.name} performed: {action.action_type.name}")
+
+                    if current_player.name in to_act:
+                        to_act.remove(current_player.name)
+
+                    if self.current_bet > old_bet:
+                        for p in self.active_players():
+                            if p != current_player and p.chips > 0:
+                                to_act.add(p.name)
+
+                    if not current_player.is_playing:
+                        if current_player.name in to_act:
+                            to_act.remove(current_player.name)
+                            
                     break
                 except InvalidActionError as invalid:
                     print(f"Error: {invalid}")
+            if len(self.active_players()) <= 1:
+                break
 
     def reveal_community_cards(self, betting_round: BettingRound):
         match betting_round:
@@ -175,7 +201,16 @@ class Game:
             if len(self.active_players()) <= 1:
                 break
             self.reveal_community_cards(betting_round)
-        return self.determine_winner()
+        
+        winner = self.determine_winner()
+        if winner:
+            print(f"Winner: {winner.name} wins: {self.pot} chips!")
+            winner.chips += self.pot
+            winner.hands_won += 1
+            self.pot = 0
+        else:
+            print("Error")
+        return winner
 
     @property
     def players(self):

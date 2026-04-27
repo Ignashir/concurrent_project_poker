@@ -69,7 +69,7 @@ class GameState:
     def pot(self, amount):
         if amount < 0:
             raise ValueError("Pot amount cannot be negative.")
-        self._pot += amount
+        self._pot = amount
 
     @property
     def current_player_index(self):
