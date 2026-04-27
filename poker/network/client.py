@@ -1,7 +1,7 @@
 import socket
 from poker.network.utils import send_msg, recive_msg
 from poker.game_logic.action import ActionType
-from poker.runners.network_runner import HOST, PORT, WELCOME_MSG, REJECT_MSG
+from poker.runners.network_runner import HOST, PORT, WELCOME_MSG, REJECT_MSG, TIMEOUT_MSG
 from poker.player.network_player import YOUR_TURN_MSG, AMOUNT_MSG
 
 class Client():
@@ -14,6 +14,11 @@ class Client():
 
     def recive_server_msg(self) -> str:
             msg = recive_msg(self.client)
+            if not msg:
+                print("Server disconnected.")
+                self.active = False
+                return None
+            
             if msg == "PING":
                 return None
 
@@ -42,9 +47,10 @@ class Client():
                 msg = self.recive_server_msg()
                 if msg == WELCOME_MSG:                
                     break
-                if msg == REJECT_MSG:
+                elif msg == REJECT_MSG or msg == TIMEOUT_MSG:
                     self.active = False
                     break
+
         except Exception as e:
             print("Disconnected:", e)
 

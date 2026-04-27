@@ -121,25 +121,18 @@ class Game:
 
             while True:
                 try:
-                    self.send_message_to_the_player(f"Pot: {self.game_state.get_game_state['pot']}", current_player)
-                    self.send_message_to_the_player(f"Community Cards: {self.game_state.get_game_state['community_cards']}", current_player)
-                    self.send_message_to_the_player(f"Current Bet: {self.game_state.get_game_state['current_bet']}", current_player)
-                    self.send_message_to_the_player(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}", current_player)
-                    self.send_message_to_the_player(f"Your hand: {current_player.hand.cards}", current_player)
-                    action = current_player.take_action(self.game_state.get_game_state)
-                    self.apply_action(current_player, action)
-                    self.brodcast_msg(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
-                    break  # Exit the loop if action is successfully applied
                     state = self.game_state.get_game_state
-                    print(f"\nPot: {state['pot']} | Community: {state['community_cards']}")
-                    print(f"Current Bet: {state['current_bet']}")
-                    print(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})")
+
+                    self.send_message_to_the_player(f"\nPot: {state['pot']} | Community: {state['community_cards']}", current_player)
+                    self.send_message_to_the_player(f"Current Bet: {state['current_bet']}", current_player)
+                    self.send_message_to_the_player(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})", current_player)
+                    
                     old_bet = self.current_bet
                     
                     action = current_player.take_action(state)
                     self.apply_action(current_player, action)
-                    
-                    print(f"{current_player.name} performed: {action.action_type.name}")
+                                  
+                    self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}", current_player)
 
                     if current_player.name in to_act:
                         to_act.remove(current_player.name)
@@ -230,7 +223,7 @@ class Game:
             send_msg(msg, player.conn)
 
     def brodcast_msg(self, msg):
-            print(msg)
+        print(msg)
         if self.mode == "network":
             for player in self.players:
                 try:

@@ -8,8 +8,8 @@ from poker.player.network_player import NetworkPlayer
 
 HOST = "127.0.0.1"
 PORT = 1978
-MAX_TIME_FOR_PLAYERS_TO_LOG_IN = 120  # s
-HEALTH_CHECK_PERIOD = 10
+MAX_TIME_FOR_PLAYERS_TO_LOG_IN = 15  # s
+HEALTH_CHECK_PERIOD = 100
 TIMEOUT_MSG = "To much time has passed, we need to close the session"
 REJECT_MSG = "The lobby is full, you have been disconnected"
 WELCOME_MSG = "Welcome to the Console Texas Hold'em Game!"
@@ -98,14 +98,12 @@ class NetworkRunner:
         
         if player:
             print(f"{player.name} assigned to {address}")
-            try:
-                self.wait_for_all_players_to_be_registered(player)
-            except TimeoutError as e:
-                conn.close()
+
+            self.wait_for_all_players_to_be_registered(player)
+
         else:
             send_msg(REJECT_MSG, conn)
             conn.close()
-        # do not know rn
 
     def register_client(self, conn):
         with self.start_condition:
@@ -139,19 +137,24 @@ class NetworkRunner:
 
     def wait_for_all_players_to_be_registered(self, player):
         start = time.time()
-        with self.start_condition:
-            while not self.ready_flag and self.running:
+        while True:
+            with self.start_condition:
+                if self.ready_flag or not self.running:
+                    return
                 if player.conn is None: 
                     print(f"Thread for {player.name} exiting due to disconnect.")
                     return
 
                 elapsed = time.time() - start
                 if elapsed > MAX_TIME_FOR_PLAYERS_TO_LOG_IN:
-                    send_msg(TIMEOUT_MSG, player.conn)
-                    raise TimeoutError("Players did not logged in in the required time")
-                
+                    conn = player.conn
+                    break
                 self.start_condition.wait(timeout=1)
-    
+
+        print("[TIMEOUT TRIGGERED]")
+        send_msg(TIMEOUT_MSG, conn)
+        self.handle_disconnect(conn)
+
     def broadcast(self, msg: str):
         for conn in self.connections:
             try:
@@ -183,17 +186,18 @@ class NetworkRunner:
             for p in self.players:
                 if p.conn == conn:
                     print(f"[REMOVING PLAYER] {p.name}")
-                    p.conn = None
+                    p.conn = None   
                     break
             
             self.connected_players -= 1
 
+            #TODO addres that a bit better
             if self.ready_flag:
                 print("Game interrupted due to disconnect")
                 self.running = False
                 self.broadcast("A player disconnected. Game stopped.")
                 self.server.close()
-            else:
-                self.broadcast(f"[PLAYERS] {self.connected_players}/{len(self.players)}")
 
             self.start_condition.notify_all()
+
+        self.broadcast(f"[PLAYERS] {self.connected_players}/{len(self.players)}")
