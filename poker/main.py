@@ -11,7 +11,7 @@ from poker.player.network_player import NetworkPlayer
 def console_main() -> Runner:
     num_players = int(input("Enter the number of players: "))
     players = ConsolePlayer.create_players(num_players, Game.STARTING_CHIPS)
-    game = Game(players)
+    game = Game(players, "console")
     runner = ConsoleRunner(game)
     return runner
 
@@ -19,7 +19,7 @@ def network_main() -> Runner:
     num_players = 3#int(input("Enter the number of players: "))
 
     players = NetworkPlayer.create_players(num_players, Game.STARTING_CHIPS) 
-    game = Game(players)
+    game = Game(players, "network")
     runner = NetworkRunner(game)
     return runner
 

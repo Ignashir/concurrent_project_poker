@@ -9,8 +9,8 @@ from poker.player.network_player import NetworkPlayer
 HOST = "127.0.0.1"
 PORT = 1978
 MAX_TIME_FOR_PLAYERS_TO_LOG_IN = 120  # s
-HEALTH_CHECK_PERIOD = 1
-START_MSG = "The game is starting"
+HEALTH_CHECK_PERIOD = 10
+TIMEOUT_MSG = "To much time has passed, we need to close the session"
 REJECT_MSG = "The lobby is full, you have been disconnected"
 WELCOME_MSG = "Welcome to the Console Texas Hold'em Game!"
 
@@ -54,12 +54,12 @@ class NetworkRunner:
             thread = threading.Thread(
                 target=self.manage_client,
                 args=(conn, addr),
-                #daemon=True
+                daemon=True
             )
             thread.start()
 
             print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
-
+        
         self.server.close()
         self.start_game()
     
@@ -76,7 +76,8 @@ class NetworkRunner:
             if play_again.lower() != 'y':
                 print("Thanks for playing!")
                 break
-
+    
+    #TODO extend 
     def server_control(self):
         """Allows stopping server from console"""
         while True:
@@ -89,7 +90,6 @@ class NetworkRunner:
                     self.start_condition.notify_all()
                 self.server.close()
                 break
-        self.game.run
 
 
     def manage_client(self, conn, address):
@@ -102,8 +102,6 @@ class NetworkRunner:
                 self.wait_for_all_players_to_be_registered(player)
             except TimeoutError as e:
                 conn.close()
-                #propagete the closing to other registerd clinets and the server
-                pass
         else:
             send_msg(REJECT_MSG, conn)
             conn.close()
@@ -139,15 +137,6 @@ class NetworkRunner:
 
             return player
 
-    # def wait_for_all_players_to_be_registered(self, conn):
-    #     start = time.time()
-    #     with self.start_condition:
-    #         diff = time.time() - start
-    #         if diff > MAX_TIME_FOR_PLAYERS_TO_LOG_IN:
-    #             raise TimeoutError("")
-
-    #         while not self.ready_flag and self.running:
-    #             self.start_condition.wait()
     def wait_for_all_players_to_be_registered(self, player):
         start = time.time()
         with self.start_condition:
@@ -158,6 +147,7 @@ class NetworkRunner:
 
                 elapsed = time.time() - start
                 if elapsed > MAX_TIME_FOR_PLAYERS_TO_LOG_IN:
+                    send_msg(TIMEOUT_MSG, player.conn)
                     raise TimeoutError("Players did not logged in in the required time")
                 
                 self.start_condition.wait(timeout=1)
@@ -166,8 +156,8 @@ class NetworkRunner:
         for conn in self.connections:
             try:
                 send_msg(msg, conn)
-            except Exception:
-                pass
+            except Exception as e:
+                raise ValueError("broadcast something went wrong in the server")
 
     def connection_monitor(self):
         while self.running:

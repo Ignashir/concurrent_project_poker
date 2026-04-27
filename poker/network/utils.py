@@ -19,7 +19,7 @@ def recive_msg(conn) -> str:
     return recv_exact(conn, length).decode()
 
 
-def send_msg_with_ack(conn, msg) -> bool:
+def send_msg_with_ack(msg, conn) -> bool:
     send_msg(msg, conn)
 
     try:

@@ -2,7 +2,7 @@ import socket
 from poker.network.utils import send_msg, recive_msg
 from poker.game_logic.action import ActionType
 from poker.runners.network_runner import HOST, PORT, WELCOME_MSG, REJECT_MSG
-
+from poker.player.network_player import YOUR_TURN_MSG, AMOUNT_MSG
 
 class Client():
 
@@ -10,7 +10,7 @@ class Client():
         self.client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.client.connect((host, port))
         self.active = True  
-        self.possible_actions = [action.name for action in ActionType]
+        self.possible_actions = [action for action in ActionType]
 
     def recive_server_msg(self) -> str:
             msg = recive_msg(self.client)
@@ -26,20 +26,8 @@ class Client():
 
         self.registration_loop()
 
-
-        # Game loop
         try:
-            while self.active:
-                msg = self.recive_server_msg()
-                print(f"[SERVER]: {msg}")
-
-                if msg == "YOUR_TURN":
-                    action = self.get_action_input()
-                    send_msg(str(action), self.client)
-
-                elif msg == "AMOUNT?":
-                    amount = input("Enter amount: ")
-                    send_msg(amount, self.client)
+            self.game_loop()
 
         except Exception as e:
             print("Disconnected:", e)
@@ -59,6 +47,18 @@ class Client():
                     break
         except Exception as e:
             print("Disconnected:", e)
+
+    def game_loop(self):
+        while self.active:
+            msg = self.recive_server_msg()
+
+            if msg == YOUR_TURN_MSG:
+                action = self.get_action_input()
+                send_msg(str(action), self.client)
+
+            elif msg == AMOUNT_MSG:
+                amount = input("Enter amount: ")
+                send_msg(amount, self.client)
 
     def get_action_input(self):
 

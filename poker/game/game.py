@@ -7,15 +7,19 @@ from poker.game.game_state import GameState
 from poker.game_logic.action import Action
 from poker.utils.enums import HandStrength, BettingRound, ActionType
 from poker.utils.errors import InvalidActionError
-
+from poker.network.utils import send_msg, send_msg_with_ack
 
 class Game:
     STARTING_CHIPS = 1000
     SMALL_BLIND = 10
     BIG_BLIND = 20
-    def __init__(self, players: List[Player]):
+    def __init__(self, players: List[Player], mode: str):
         self._game_state = GameState(players)
         self._card_deck = CardDeck()
+        if mode in ["console", "network"]:
+            self.mode = mode
+        else:
+            raise ValueError("There is a typo in the mode")
 
     def clean_state(self):
         """Reset the game state for a new game."""
@@ -114,14 +118,14 @@ class Game:
             current_player = self.get_next_player()
             while True:
                 try:
-                    print(f"Pot: {self.game_state.get_game_state['pot']}")
-                    print(f"Community Cards: {self.game_state.get_game_state['community_cards']}")
-                    print(f"Current Bet: {self.game_state.get_game_state['current_bet']}")
-                    print(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}")
-                    print(f"Your hand: {current_player.hand.cards}")
+                    self.send_message_to_the_player(f"Pot: {self.game_state.get_game_state['pot']}", current_player)
+                    self.send_message_to_the_player(f"Community Cards: {self.game_state.get_game_state['community_cards']}", current_player)
+                    self.send_message_to_the_player(f"Current Bet: {self.game_state.get_game_state['current_bet']}", current_player)
+                    self.send_message_to_the_player(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}", current_player)
+                    self.send_message_to_the_player(f"Your hand: {current_player.hand.cards}", current_player)
                     action = current_player.take_action(self.game_state.get_game_state)
                     self.apply_action(current_player, action)
-                    print(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
+                    self.brodcast_msg(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
                     break  # Exit the loop if action is successfully applied
                 except InvalidActionError as invalid:
                     print(f"Error: {invalid}")
@@ -184,7 +188,20 @@ class Game:
         # Determine winner
         winner = self.determine_winner()
         return winner
+    
+    def send_message_to_the_player(self, msg: str, player: Player):
+        print(msg)
+        if self.mode == "network":
+            send_msg(msg, player.conn)
 
+    def brodcast_msg(self, msg):
+            print(msg)
+        if self.mode == "network":
+            for player in self.players:
+                try:
+                    send_msg(msg, player.conn)
+                except Exception as e:
+                    raise ValueError("brodcast_msg something went wrong in the game")
     # def run(self):
     #     self.start_game(len(self.players))
     #     while True:

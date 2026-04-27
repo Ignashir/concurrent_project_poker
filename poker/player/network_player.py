@@ -6,6 +6,8 @@ from poker.game_logic.action import Action
 
 from poker.network.utils import recive_msg, send_msg
 
+YOUR_TURN_MSG = "Your turn"
+AMOUNT_MSG = "AMOUNT?"
 class NetworkPlayer(Player):
     @property
     def conn(self):
@@ -18,15 +20,14 @@ class NetworkPlayer(Player):
  
     def take_action(self, game_state: Dict) -> Action:
         try:
-            #TODO
-            send_msg("YOUR_TURN", self.conn)
+            send_msg(YOUR_TURN_MSG, self.conn)
 
             msg = recive_msg(self.conn)
 
             action_type = ActionType(int(msg))
 
             if action_type == ActionType.RAISE:
-                send_msg("AMOUNT?", self.conn)
+                send_msg(AMOUNT_MSG, self.conn)
                 amount = int(recive_msg(self.conn))
                 return Action(action_type, amount)
 

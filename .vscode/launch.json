@@ -10,6 +10,15 @@
             "console": "integratedTerminal",
             "args": ["--mode", "network"]
         },
+        {
+            "name": "Server Console Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.main",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["--mode", "console"]
+        },
                 {
             "name": "Client 1 Network Debugger",
             "type": "debugpy",
