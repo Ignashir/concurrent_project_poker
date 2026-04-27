@@ -1,4 +1,3 @@
-from random import randint
 from typing import List
 
 from poker.player.player import Player
@@ -13,70 +12,65 @@ class Game:
     STARTING_CHIPS = 1000
     SMALL_BLIND = 10
     BIG_BLIND = 20
+
     def __init__(self, players: List[Player]):
         self._game_state = GameState(players)
         self._card_deck = CardDeck()
 
     def clean_state(self):
-        """Reset the game state for a new game."""
         self._game_state.reset_state()
         self._card_deck.reset_deck()
 
     def start_game(self):
-        """Initiate Players + reset the card deck + deal cards - Prepare the clean state
-
-        Args:
-            num_players (int): _description_
-
-        Raises:
-            ValueError: _description_
-        """
-        # Reset statistics from previous game
         self.clean_state()
-        
-        # Reset Players hands
         for player in self.players:
             player.reset_hand()
-
-        # Reset CardDeck
         self.card_deck.reset_deck()
 
     def deal_cards(self):
-        # Deal hole cards to each player
         for player_id in range(len(self.players)):
             self.players[player_id].is_playing = True
-            for _ in range(2):  # Deal 2 hole cards to each player
+            for _ in range(2):
                 self.players[player_id].take_card(self.card_deck.deal_card())
 
+    def active_players(self) -> List[Player]:
+        return [p for p in self.players if p.is_playing]
+
     def get_next_player(self):
-        # Get the next player who is still in the game
         current_position = self.game_state.current_player_index
         avoid_infinite_loop_counter = 0
-        # Search for a next player who is still playing
         while avoid_infinite_loop_counter < len(self.players):
-            if self.players[current_position].is_playing:
-                self._game_state._current_player_index = (current_position + 1) % len(self.players)
-                return self.players[current_position]
+            player = self.players[current_position]
+            if player.is_playing and player.chips > 0:
+                self._game_state.current_player_index = (current_position + 1) % len(self.players)
+                return player
             current_position = (current_position + 1) % len(self.players)
-            avoid_infinite_loop_counter += 1
-        raise ValueError("No players are currently playing.")
+            avoid_infinite_loop_counter += 1   
+        return None
 
     def validate_action(self, player: Player, action: Action) -> bool:
-        # Implement validation logic for actions (e.g., cannot check if there is a current bet, cannot call if not enough chips)
         match action.action_type:
             case ActionType.FOLD:
-                return True  # Folding is always valid
+                return True
             case ActionType.CHECK:
-                return self.current_bet == player.my_current_bet  # Can only check if there is no current bet
+                return self.current_bet == player.my_current_bet
             case ActionType.CALL:
-                return player.my_current_bet < self.current_bet and \
-                       player.chips >= (self.current_bet - player.my_current_bet)  # Can only call if there is a current bet and player has enough chips
+                return (
+                    player.my_current_bet < self.current_bet
+                    and player.chips >= (self.current_bet - player.my_current_bet)
+                )
             case ActionType.RAISE:
-                return player.chips > (self.current_bet - player.my_current_bet)  # Can only raise if player has enough chips to at least call
+                if action.amount is None or action.amount <= 0:
+                    return False
+                new_total_bet = player.my_current_bet + action.amount
+                return (
+                    player.chips >= action.amount 
+                    and new_total_bet > self.current_bet
+                )
             case ActionType.ALL_IN:
-                return player.chips > 0  # Can go all-in if player has any chips left
+                return player.chips > 0
             case ActionType.SMALL_BLIND | ActionType.BIG_BLIND:
-                return True if self.blinds_posting else False  # Blinds can only be posted during the initial betting round
+                return True if self.blinds_posting else False
         return False
 
     def apply_raise(self, player: Player, amount: int):
@@ -93,7 +87,7 @@ class Game:
             case ActionType.FOLD:
                 player.is_playing = False
             case ActionType.CHECK:
-                pass  # No chips are moved for a check
+                pass
             case ActionType.CALL:
                 difference = self.current_bet - player.my_current_bet
                 self.apply_raise(player, difference)
@@ -110,21 +104,48 @@ class Game:
                 self.apply_raise(player, amount)
 
     def betting_round(self):
-        for _ in range(len(self.players)):
+        to_act = {p.name for p in self.active_players() if p.chips > 0}
+        
+        if len(to_act) <= 1:
+            return
+
+        while to_act:
             current_player = self.get_next_player()
+            if current_player is None or current_player.name not in to_act:
+                if not any(name in to_act for name in [p.name for p in self.active_players()]):
+                    break
+                continue
+
             while True:
                 try:
-                    print(f"Pot: {self.game_state.get_game_state['pot']}")
-                    print(f"Community Cards: {self.game_state.get_game_state['community_cards']}")
-                    print(f"Current Bet: {self.game_state.get_game_state['current_bet']}")
-                    print(f"{current_player.name}'s turn. Chips: {current_player.chips}, Current Bet: {current_player.my_current_bet}")
-                    print(f"Your hand: {current_player.hand.cards}")
-                    action = current_player.take_action(self.game_state.get_game_state)
+                    state = self.game_state.get_game_state
+                    print(f"\nPot: {state['pot']} | Community: {state['community_cards']}")
+                    print(f"Current Bet: {state['current_bet']}")
+                    print(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})")
+                    old_bet = self.current_bet
+                    
+                    action = current_player.take_action(state)
                     self.apply_action(current_player, action)
-                    print(f"{current_player.name} performed action: {action.action_type.name} with amount: {action.amount if action.amount else 'N/A'}")
-                    break  # Exit the loop if action is successfully applied
+                    
+                    print(f"{current_player.name} performed: {action.action_type.name}")
+
+                    if current_player.name in to_act:
+                        to_act.remove(current_player.name)
+
+                    if self.current_bet > old_bet:
+                        for p in self.active_players():
+                            if p != current_player and p.chips > 0:
+                                to_act.add(p.name)
+
+                    if not current_player.is_playing:
+                        if current_player.name in to_act:
+                            to_act.remove(current_player.name)
+                            
+                    break
                 except InvalidActionError as invalid:
                     print(f"Error: {invalid}")
+            if len(self.active_players()) <= 1:
+                break
 
     def reveal_community_cards(self, betting_round: BettingRound):
         match betting_round:
@@ -136,72 +157,73 @@ class Game:
                 self._game_state.community_cards.append(self.card_deck.deal_card())
 
     def determine_winner(self):
+        active = self.active_players()
+        if len(active) == 1:
+            return active[0]
+
         winner = None
         best_hand_strength = HandStrength.HIGH_CARD
-        best_hand_tiebreaker = None
+        best_hand_tiebreaker = []
 
-        for player in self.players:
-            if player.is_playing:
-                hand_strength, tiebreaker = player.hand.evaluate_hand(self.community_cards)
-                if hand_strength.value > best_hand_strength.value:
-                    best_hand_strength = hand_strength
+        for player in active:
+            hand_strength, tiebreaker = player.hand.evaluate_hand(self.community_cards)
+            if hand_strength.value > best_hand_strength.value:
+                best_hand_strength = hand_strength
+                best_hand_tiebreaker = tiebreaker
+                winner = player
+            elif hand_strength.value == best_hand_strength.value:
+                if tiebreaker > best_hand_tiebreaker:
                     best_hand_tiebreaker = tiebreaker
                     winner = player
-                elif hand_strength.value == best_hand_strength.value:
-                    # If hand strength is the same, compare tiebreakers
-                    if tiebreaker > best_hand_tiebreaker:
-                        best_hand_tiebreaker = tiebreaker
-                        winner = player
+
         return winner
 
     def perform_initial_bets(self):
-        # Perform initial bets (small blind and big blind)
         small_blind_position = self.game_state.starting_position % len(self.players)
         big_blind_position = (small_blind_position + 1) % len(self.players)
 
         small_blind_player = self.players[small_blind_position]
         big_blind_player = self.players[big_blind_position]
-        
+
         self.blinds_posting = True
         self.apply_action(small_blind_player, Action(ActionType.SMALL_BLIND, self.SMALL_BLIND))
         self.apply_action(big_blind_player, Action(ActionType.BIG_BLIND, self.BIG_BLIND))
         self.blinds_posting = False
 
-        # Set who starts (player after big blind)
         self._game_state.current_player_index = (big_blind_position + 1) % len(self.players)
 
     def run_single_game(self) -> Player:
-        # Reset game state
         self.start_game()
-        # Perform first 2 bets
         self.perform_initial_bets()
-        # Deal 2 cards to each player
         self.deal_cards()
         for betting_round in BettingRound:
-            # Perform betting round
             self.betting_round()
+            if len(self.active_players()) <= 1:
+                break
             self.reveal_community_cards(betting_round)
-        # Determine winner
+        
         winner = self.determine_winner()
+        if winner:
+            print(f"Winner: {winner.name} wins: {self.pot} chips!")
+            winner.chips += self.pot
+            winner.hands_won += 1
+            self.pot = 0
+        else:
+            print("Error")
         return winner
-
-    # def run(self):
-    #     self.start_game(len(self.players))
-    #     while True:
-    #         self.run_single_game()
 
     @property
     def players(self):
         return self._game_state.players
-    
+
     @property
     def game_state(self):
         return self._game_state
-    
+
     @property
     def card_deck(self):
         return self._card_deck
-    
+
     @property
     def pot(self):
         return self._game_state.pot
@@ -209,7 +231,7 @@ class Game:
     @pot.setter
     def pot(self, amount):
         self._game_state.pot = amount
-    
+
     @property
     def current_bet(self):
         return self._game_state.current_bet
@@ -225,7 +247,7 @@ class Game:
     @property
     def blinds_posting(self):
         return self._game_state.blinds_posting
-    
+
     @blinds_posting.setter
     def blinds_posting(self, value: bool):
         self._game_state.blinds_posting = value
