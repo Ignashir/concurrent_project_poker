@@ -1,0 +1,46 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Server Network Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.main",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args": ["--mode", "network"]
+        },
+                {
+            "name": "Client 1 Network Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.network.client",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Client 2 Network Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.network.client",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Client 3 Network Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.network.client",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "Client 4 Network Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "poker.network.client",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal"
+        }
+    ]
+} 
