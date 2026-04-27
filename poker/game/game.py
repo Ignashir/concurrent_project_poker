@@ -40,12 +40,13 @@ class Game:
         current_position = self.game_state.current_player_index
         avoid_infinite_loop_counter = 0
         while avoid_infinite_loop_counter < len(self.players):
-            if self.players[current_position].is_playing:
-                self._game_state._current_player_index = (current_position + 1) % len(self.players)
-                return self.players[current_position]
+            player = self.players[current_position]
+            if player.is_playing and player.chips > 0:
+                self.game_state.current_player_index = (current_position + 1) % len(self.players)
+                return player
             current_position = (current_position + 1) % len(self.players)
             avoid_infinite_loop_counter += 1
-        raise ValueError("No players are currently playing.")
+        return None
 
     def validate_action(self, player: Player, action: Action) -> bool:
         match action.action_type:
@@ -102,6 +103,10 @@ class Game:
             if len(self.active_players()) <= 1:
                 break
             current_player = self.get_next_player()
+
+            if current_player is None:
+                break
+            
             while True:
                 try:
                     print(f"Pot: {self.game_state.get_game_state['pot']}")
