@@ -2,17 +2,24 @@ import time
 import threading
 import socket
 from typing import List
+import json
 
 from poker.network.utils import send_msg, recive_msg
 from poker.player.network_player import NetworkPlayer
 
 HOST = "127.0.0.1"
 PORT = 1978
-MAX_TIME_FOR_PLAYERS_TO_LOG_IN = 15  # s
-HEALTH_CHECK_PERIOD = 100
+MAX_TIME_FOR_PLAYERS_TO_LOG_IN = 100  # s
+HEALTH_CHECK_PERIOD = 5
 TIMEOUT_MSG = "To much time has passed, we need to close the session"
 REJECT_MSG = "The lobby is full, you have been disconnected"
 WELCOME_MSG = "Welcome to the Console Texas Hold'em Game!"
+SERVER_STOP_MSG = "Stopping server..."
+
+
+#TODO 
+# 1 when only one player left in the lobby
+
 
 class NetworkRunner:
 
@@ -63,35 +70,65 @@ class NetworkRunner:
         self.server.close()
         self.start_game()
     
+    def lobby_listener(self, player):
+        conn = player.conn
+
+        try:
+            while self.running and conn is not None:
+                msg = recive_msg(conn)
+
+                if msg == "QUIT":
+                    print(f"[LOBBY QUIT] {player.name}")
+                    self.handle_disconnect(conn)
+                    return
+
+        except Exception:
+            # socket died
+            print(f"[LOBBY DISCONNECT] {player.name}")
+            self.handle_disconnect(conn)
+
     def start_game(self):
         
-        print(WELCOME_MSG)
-        self.broadcast(WELCOME_MSG)
-        while True:
+        while self.running:
+            print(WELCOME_MSG)
+            self.broadcast(WELCOME_MSG)
             winner = self.game.run_single_game()
 
-            print(f"The winner is: {winner.name} with hand strength: {winner.hand.evaluate_hand(self.game.community_cards)[0].name}")
+            self.game.brodcast_msg("The winner is: {winner.name} with hand strength: {winner.hand.evaluate_hand(self.game.community_cards)[0].name}")
 
-            play_again = input("Do you want to play another game? (y/n): ")
-            if play_again.lower() != 'y':
-                print("Thanks for playing!")
-                break
+            #TODO ask all players if they want to play again
+            self.game.brodcast_msg(f"The winner is: {winner.name}")
+
     
-    #TODO extend 
     def server_control(self):
         """Allows stopping server from console"""
         while True:
             cmd = input()
-            print(cmd)
+            if cmd == "help":
+                options = {"stop": "Stop the server"}
+                print(options) 
             if cmd == "stop":
-                print("Stopping server...")
+                print(SERVER_STOP_MSG)
+                self.save_game_state()
+                self.broadcast(SERVER_STOP_MSG)
                 self.running = False
                 with self.start_condition:
                     self.start_condition.notify_all()
+                
+                self.terminate_all_connections()
+
                 self.server.close()
                 break
 
+    def terminate_all_connections(self):
+        self.broadcast("=========STATE OF THE GAME=========")
+        for player in self.players:
+            self.broadcast(f"{player.name} (Chips: {player.chips}, My Bet: {player.my_current_bet})")
+        
+        for conn in self.connections:
+            self.handle_disconnect(conn)
 
+    
     def manage_client(self, conn, address):
         print(f"[NEW CONNECTION] {address} connected.")
         player = self.register_client(conn)
@@ -99,11 +136,17 @@ class NetworkRunner:
         if player:
             print(f"{player.name} assigned to {address}")
 
+            threading.Thread(
+                target=self.lobby_listener,
+                args=(player,),
+                daemon=True
+            ).start()
+
             self.wait_for_all_players_to_be_registered(player)
 
         else:
             send_msg(REJECT_MSG, conn)
-            conn.close()
+            conn.close()    
 
     def register_client(self, conn):
         with self.start_condition:
@@ -156,11 +199,17 @@ class NetworkRunner:
         self.handle_disconnect(conn)
 
     def broadcast(self, msg: str):
-        for conn in self.connections:
+        dead_connections = []
+
+        for conn in list(self.connections):
             try:
                 send_msg(msg, conn)
-            except Exception as e:
-                raise ValueError("broadcast something went wrong in the server")
+            except Exception:
+                dead_connections.append(conn)
+
+        for conn in dead_connections:
+            print("[DISCONNECT] Removing dead connection")
+            self.handle_disconnect(conn)
 
     def connection_monitor(self):
         while self.running:
@@ -182,22 +231,43 @@ class NetworkRunner:
         with self.start_condition:
             if conn in self.connections:
                 self.connections.remove(conn)
-            
+
             for p in self.players:
                 if p.conn == conn:
                     print(f"[REMOVING PLAYER] {p.name}")
-                    p.conn = None   
+                    p.conn = None
                     break
-            
-            self.connected_players -= 1
 
-            #TODO addres that a bit better
+            if self.connected_players > 0:
+                self.connected_players -= 1
+
             if self.ready_flag:
                 print("Game interrupted due to disconnect")
                 self.running = False
-                self.broadcast("A player disconnected. Game stopped.")
-                self.server.close()
 
             self.start_condition.notify_all()
 
-        self.broadcast(f"[PLAYERS] {self.connected_players}/{len(self.players)}")
+        try:
+            conn.close()
+        except:
+            pass
+
+        print(f"[PLAYERS] {self.connected_players}/{len(self.players)}")
+
+    def save_game_state(self):
+        state = {
+            "players": [
+                {
+                    "name": p.name,
+                    "chips": p.chips,
+                    "bet": p.my_current_bet,
+                    "active": p.is_playing
+                }
+                for p in self.players
+            ],
+            "pot": self.game.pot,
+            "community_cards": [str(c) for c in self.game.community_cards]
+        }
+
+        with open("game_state.json", "w") as f:
+            json.dump(state, f, indent=4)

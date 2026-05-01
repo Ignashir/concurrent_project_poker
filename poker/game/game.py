@@ -130,9 +130,13 @@ class Game:
                     old_bet = self.current_bet
                     
                     action = current_player.take_action(state)
+                    if current_player.conn is None:
+                        self.brodcast_msg(f"{current_player.name} disconnected and folded.")
+                    else:
+                        self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
+                    
                     self.apply_action(current_player, action)
                                   
-                    self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}", current_player)
 
                     if current_player.name in to_act:
                         to_act.remove(current_player.name)
@@ -219,17 +223,25 @@ class Game:
     
     def send_message_to_the_player(self, msg: str, player: Player):
         print(msg)
-        if self.mode == "network":
+        if self.mode == "network" and player.conn is not None:
             send_msg(msg, player.conn)
 
     def brodcast_msg(self, msg):
         print(msg)
         if self.mode == "network":
+            dead_players = []
+
             for player in self.players:
+                if player.conn is None:
+                    continue
                 try:
                     send_msg(msg, player.conn)
-                except Exception as e:
-                    raise ValueError("brodcast_msg something went wrong in the game")
+                except Exception:
+                    dead_players.append(player)
+
+            for player in dead_players:
+                print(f"[DISCONNECT] Removing {player.name}")
+                player.conn = None
     @property
     def players(self):
         return self._game_state.players

@@ -24,16 +24,27 @@ class NetworkPlayer(Player):
 
             msg = recive_msg(self.conn)
 
+            if msg == "QUIT":
+                raise ConnectionAbortedError()
+
             action_type = ActionType(int(msg))
 
             if action_type == ActionType.RAISE:
                 send_msg(AMOUNT_MSG, self.conn)
-                amount = int(recive_msg(self.conn))
+
+                amount_msg = recive_msg(self.conn)
+
+                if amount_msg == "QUIT":
+                    raise ConnectionAbortedError()
+
+                amount = int(amount_msg)
                 return Action(action_type, amount)
 
             return Action(action_type)
 
-        except Exception:
+        except (ConnectionAbortedError, Exception):
+            self.conn = None
+            self.is_playing = False
             return Action(ActionType.FOLD)
 
     @staticmethod
