@@ -193,6 +193,7 @@ class Client():
             except:
                 print("[DISCONNECTED FROM SERVER]")
                 self.active.clear()
+                os._exit(0)
                 break
             self.last_server_msg_time = time.time()
             if msg == "PING":
