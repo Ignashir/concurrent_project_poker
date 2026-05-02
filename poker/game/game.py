@@ -6,16 +6,19 @@ from poker.game.game_state import GameState
 from poker.game_logic.action import Action
 from poker.utils.enums import HandStrength, BettingRound, ActionType
 from poker.utils.errors import InvalidActionError
-
+from poker.network.utils import send_msg, send_msg_with_ack
 
 class Game:
     STARTING_CHIPS = 1000
     SMALL_BLIND = 10
     BIG_BLIND = 20
-
-    def __init__(self, players: List[Player]):
+    def __init__(self, players: List[Player], mode: str):
         self._game_state = GameState(players)
         self._card_deck = CardDeck()
+        if mode in ["console", "network"]:
+            self.mode = mode
+        else:
+            raise ValueError("There is a typo in the mode")
 
     def clean_state(self):
         self._game_state.reset_state()
@@ -119,15 +122,23 @@ class Game:
             while True:
                 try:
                     state = self.game_state.get_game_state
-                    print(f"\nPot: {state['pot']} | Community: {state['community_cards']}")
-                    print(f"Current Bet: {state['current_bet']}")
-                    print(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})")
+
+                    self.send_message_to_the_player(f"\nPot: {state['pot']} | Community: {state['community_cards']}", current_player)
+                    self.send_message_to_the_player(f"Current Bet: {state['current_bet']}", current_player)
+                    self.send_message_to_the_player(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})", current_player)
+                    
                     old_bet = self.current_bet
                     
                     action = current_player.take_action(state)
-                    self.apply_action(current_player, action)
+                    if current_player.conn is None:
+                        current_player.is_playing = False
+                        to_act.discard(current_player.name)
+                        continue
+                    else:
+                        self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
                     
-                    print(f"{current_player.name} performed: {action.action_type.name}")
+                    self.apply_action(current_player, action)
+                                  
 
                     if current_player.name in to_act:
                         to_act.remove(current_player.name)
@@ -211,7 +222,28 @@ class Game:
         else:
             print("Error")
         return winner
+    
+    def send_message_to_the_player(self, msg: str, player: Player):
+        print(msg)
+        if self.mode == "network" and player.conn is not None:
+            send_msg(msg, player.conn)
 
+    def brodcast_msg(self, msg):
+        print(msg)
+        if self.mode == "network":
+            dead_players = []
+
+            for player in self.players:
+                if player.conn is None:
+                    continue
+                try:
+                    send_msg(msg, player.conn)
+                except Exception:
+                    dead_players.append(player)
+
+            for player in dead_players:
+                print(f"[DISCONNECT] Removing {player.name}")
+                player.conn = None
     @property
     def players(self):
         return self._game_state.players

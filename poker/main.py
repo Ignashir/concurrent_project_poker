@@ -5,15 +5,24 @@ from poker.player.console_player import ConsolePlayer
 from poker.runners.console_runner import ConsoleRunner
 from poker.runners.runner import Runner
 
+from poker.runners.network_runner import NetworkRunner
+from poker.player.network_player import NetworkPlayer
+
 def console_main() -> Runner:
     num_players = int(input("Enter the number of players: "))
     players = ConsolePlayer.create_players(num_players, Game.STARTING_CHIPS)
-    game = Game(players)
+    game = Game(players, "console")
     runner = ConsoleRunner(game)
     return runner
 
 def network_main() -> Runner:
-    pass
+    num_players = 3#int(input("Enter the number of players: "))
+
+    players = NetworkPlayer.create_players(num_players, Game.STARTING_CHIPS) 
+    game = Game(players, "network")
+    runner = NetworkRunner(game)
+    return runner
+
 
 
 if __name__ == "__main__":

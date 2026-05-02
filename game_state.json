@@ -1,0 +1,24 @@
+{
+    "players": [
+        {
+            "name": "Player 1",
+            "chips": 1000,
+            "bet": 0,
+            "active": true
+        },
+        {
+            "name": "Player 2",
+            "chips": 1000,
+            "bet": 0,
+            "active": true
+        },
+        {
+            "name": "Player 3",
+            "chips": 1000,
+            "bet": 0,
+            "active": true
+        }
+    ],
+    "pot": 0,
+    "community_cards": []
+}
