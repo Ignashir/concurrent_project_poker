@@ -17,8 +17,11 @@ WELCOME_MSG = "Welcome to the Console Texas Hold'em Game!"
 SERVER_STOP_MSG = "Stopping server..."
 
 
-#TODO 
-# 1 when only one player left in the lobby
+from enum import Enum
+
+class ServerState(Enum):
+    LOBBY = 1
+    GAME = 2
 
 
 class NetworkRunner:
@@ -41,6 +44,8 @@ class NetworkRunner:
 
         self.players = game.players
         self.connections = []
+
+        self.state = ServerState.LOBBY
 
     def run(self):
 
@@ -68,7 +73,9 @@ class NetworkRunner:
             print(f"[ACTIVE CONNECTIONS] {threading.active_count() - 1}")
         
         self.server.close()
+        self.state = ServerState.GAME
         self.start_game()
+        self.state = ServerState.LOBBY
     
     def lobby_listener(self, player):
         conn = player.conn
@@ -94,10 +101,11 @@ class NetworkRunner:
             self.broadcast(WELCOME_MSG)
             winner = self.game.run_single_game()
 
-            self.game.brodcast_msg("The winner is: {winner.name} with hand strength: {winner.hand.evaluate_hand(self.game.community_cards)[0].name}")
-
+            self.game.brodcast_msg(
+                f"The winner is: {winner.name} with hand strength: "
+                f"{winner.hand.evaluate_hand(self.game.community_cards)[0].name}"
+            )
             #TODO ask all players if they want to play again
-            self.game.brodcast_msg(f"The winner is: {winner.name}")
 
     
     def server_control(self):
@@ -111,6 +119,7 @@ class NetworkRunner:
                 print(SERVER_STOP_MSG)
                 self.save_game_state()
                 self.broadcast(SERVER_STOP_MSG)
+                time.sleep(0.5) 
                 self.running = False
                 with self.start_condition:
                     self.start_condition.notify_all()
@@ -238,12 +247,24 @@ class NetworkRunner:
                     p.conn = None
                     break
 
-            if self.connected_players > 0:
-                self.connected_players -= 1
+            self.connected_players = len([c for c in self.connections])
 
-            if self.ready_flag:
-                print("Game interrupted due to disconnect")
-                self.running = False
+            active_players = [p for p in self.players if p.conn is not None]
+
+            if self.state == ServerState.LOBBY:
+                if len(active_players) <= 1:
+                    msg = "[LOBBY] Not enough players, waiting..."
+                    print(msg)
+                    self.broadcast(msg)
+                    self.ready_flag = False
+
+            elif self.state == ServerState.GAME:
+                if len(active_players) <= 1:
+                    msg = "[GAME] Only one player left → ending game"
+                    print(msg)
+                    self.broadcast(msg)
+                    #TODO add some handling of the game state do not know rn
+                    self.running = False
 
             self.start_condition.notify_all()
 
@@ -252,7 +273,9 @@ class NetworkRunner:
         except:
             pass
 
-        print(f"[PLAYERS] {self.connected_players}/{len(self.players)}")
+        status = f"[PLAYERS] {self.connected_players}/{len(self.players)}"
+        print(status)
+        self.broadcast(status)
 
     def save_game_state(self):
         state = {

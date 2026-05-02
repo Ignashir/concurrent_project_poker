@@ -131,7 +131,9 @@ class Game:
                     
                     action = current_player.take_action(state)
                     if current_player.conn is None:
-                        self.brodcast_msg(f"{current_player.name} disconnected and folded.")
+                        current_player.is_playing = False
+                        to_act.discard(current_player.name)
+                        continue
                     else:
                         self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
                     

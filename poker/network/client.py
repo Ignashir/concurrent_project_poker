@@ -6,6 +6,7 @@ from poker.player.network_player import YOUR_TURN_MSG, AMOUNT_MSG
 import threading 
 from queue import Queue
 import time
+import os
 
 class Client():
 
@@ -197,10 +198,18 @@ class Client():
             if msg == "PING":
                 continue
 
+
             if msg == SERVER_STOP_MSG:
                 print("[SERVER STOP]")
                 self.active.clear()
-                break
+
+                try:
+                    self.client.shutdown(socket.SHUT_RDWR)
+                    self.client.close()
+                except:
+                    pass
+
+                os._exit(0)
             
             print(msg)
             self.msg_queue.put(msg)
