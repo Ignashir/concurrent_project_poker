@@ -15,6 +15,7 @@ class Game:
     def __init__(self, players: List[Player], mode: str):
         self._game_state = GameState(players)
         self._card_deck = CardDeck()
+        self.game_interrupted = False
         if mode in ["console", "network"]:
             self.mode = mode
         else:
@@ -31,10 +32,13 @@ class Game:
         self.card_deck.reset_deck()
 
     def deal_cards(self):
-        for player_id in range(len(self.players)):
-            self.players[player_id].is_playing = True
-            for _ in range(2):
-                self.players[player_id].take_card(self.card_deck.deal_card())
+        for player in self.players:
+            if player.chips > 0 and (self.mode != "network" or getattr(player, 'conn', None) is not None):
+                player.is_playing = True
+                for _ in range(2):
+                    player.take_card(self.card_deck.deal_card())
+            else:
+                player.is_playing = False
 
     def active_players(self) -> List[Player]:
         return [p for p in self.players if p.is_playing]
@@ -113,6 +117,10 @@ class Game:
             return
 
         while to_act:
+            if self.game_interrupted:
+                return 
+            if len(self.active_players()) <= 1:
+                break
             current_player = self.get_next_player()
             if current_player is None or current_player.name not in to_act:
                 if not any(name in to_act for name in [p.name for p in self.active_players()]):
@@ -121,6 +129,10 @@ class Game:
 
             while True:
                 try:
+                    if self.game_interrupted:
+                        return
+                    if len(self.active_players()) <= 1:
+                        break
                     state = self.game_state.get_game_state
 
                     self.send_message_to_the_player(f"\nPot: {state['pot']} | Community: {state['community_cards']}", current_player)
@@ -130,10 +142,11 @@ class Game:
                     old_bet = self.current_bet
                     
                     action = current_player.take_action(state)
+                
                     if current_player.conn is None:
                         current_player.is_playing = False
                         to_act.discard(current_player.name)
-                        continue
+                        break
                     else:
                         self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
                     
@@ -155,6 +168,7 @@ class Game:
                     break
                 except InvalidActionError as invalid:
                     print(f"Error: {invalid}")
+                    self.send_message_to_the_player(f"INVALID MOVE: {invalid}", current_player)
             if len(self.active_players()) <= 1:
                 break
 
@@ -208,7 +222,10 @@ class Game:
         self.perform_initial_bets()
         self.deal_cards()
         for betting_round in BettingRound:
+            if self.game_interrupted:
+                return None
             self.betting_round()
+
             if len(self.active_players()) <= 1:
                 break
             self.reveal_community_cards(betting_round)
@@ -224,11 +241,15 @@ class Game:
         return winner
     
     def send_message_to_the_player(self, msg: str, player: Player):
+        if self.game_interrupted:
+            return
         print(msg)
         if self.mode == "network" and player.conn is not None:
             send_msg(msg, player.conn)
 
     def brodcast_msg(self, msg):
+        if self.game_interrupted:
+            return
         print(msg)
         if self.mode == "network":
             dead_players = []
@@ -244,6 +265,7 @@ class Game:
             for player in dead_players:
                 print(f"[DISCONNECT] Removing {player.name}")
                 player.conn = None
+                player.is_playing = False
     @property
     def players(self):
         return self._game_state.players

@@ -2,23 +2,23 @@
     "players": [
         {
             "name": "Player 1",
-            "chips": 1000,
-            "bet": 0,
+            "chips": 990,
+            "bet": 10,
             "active": true
         },
         {
             "name": "Player 2",
-            "chips": 1000,
-            "bet": 0,
+            "chips": 980,
+            "bet": 20,
             "active": true
         },
         {
             "name": "Player 3",
-            "chips": 1000,
-            "bet": 0,
+            "chips": 980,
+            "bet": 20,
             "active": true
         }
     ],
-    "pot": 0,
+    "pot": 50,
     "community_cards": []
 }

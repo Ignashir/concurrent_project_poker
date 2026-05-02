@@ -6,8 +6,13 @@ from poker.game_logic.action import Action
 
 from poker.network.utils import recive_msg, send_msg
 
+import socket
+
 YOUR_TURN_MSG = "Your turn"
 AMOUNT_MSG = "AMOUNT?"
+TURN_TIMEOUT = 30 
+
+
 class NetworkPlayer(Player):
     @property
     def conn(self):
@@ -16,13 +21,18 @@ class NetworkPlayer(Player):
     @conn.setter
     def conn(self, conn):
         self._conn = conn
+        if conn is not None:
+            conn.settimeout(TURN_TIMEOUT)
 
  
     def take_action(self, game_state: Dict) -> Action:
         try:
+            self.conn.settimeout(TURN_TIMEOUT)
             send_msg(YOUR_TURN_MSG, self.conn)
-
-            msg = recive_msg(self.conn)
+            try:
+                msg = recive_msg(self.conn)
+            except socket.timeout:
+                return Action(ActionType.FOLD)
 
             if msg == "QUIT":
                 raise ConnectionAbortedError()
@@ -30,6 +40,7 @@ class NetworkPlayer(Player):
             action_type = ActionType(int(msg))
 
             if action_type == ActionType.RAISE:
+                self.conn.settimeout(TURN_TIMEOUT)
                 send_msg(AMOUNT_MSG, self.conn)
 
                 amount_msg = recive_msg(self.conn)

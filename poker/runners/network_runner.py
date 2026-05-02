@@ -45,6 +45,8 @@ class NetworkRunner:
         self.players = game.players
         self.connections = []
 
+        self.game_interrupted = False
+
         self.state = ServerState.LOBBY
 
     def run(self):
@@ -74,38 +76,46 @@ class NetworkRunner:
         
         self.server.close()
         self.state = ServerState.GAME
+        time.sleep(1)
         self.start_game()
         self.state = ServerState.LOBBY
     
     def lobby_listener(self, player):
         conn = player.conn
 
-        try:
-            while self.running and conn is not None:
-                msg = recive_msg(conn)
+        conn.settimeout(1.0) 
 
-                if msg == "QUIT":
-                    print(f"[LOBBY QUIT] {player.name}")
-                    self.handle_disconnect(conn)
-                    return
+        try:
+            while self.running and conn is not None and self.state == ServerState.LOBBY:
+                try:
+                    msg = recive_msg(conn)
+                    if msg == "QUIT":
+                        print(f"[LOBBY QUIT] {player.name}")
+                        self.handle_disconnect(conn)
+                        return
+                except socket.timeout:
+                    continue
 
         except Exception:
             # socket died
-            print(f"[LOBBY DISCONNECT] {player.name}")
-            self.handle_disconnect(conn)
+            if self.state == ServerState.LOBBY:
+                print(f"[LOBBY DISCONNECT] {player.name}")
+                self.handle_disconnect(conn)
 
     def start_game(self):
         
-        while self.running:
+        while self.running and not self.game_interrupted:
             print(WELCOME_MSG)
             self.broadcast(WELCOME_MSG)
             winner = self.game.run_single_game()
-
+            if winner == None:
+                return
             self.game.brodcast_msg(
                 f"The winner is: {winner.name} with hand strength: "
                 f"{winner.hand.evaluate_hand(self.game.community_cards)[0].name}"
             )
             #TODO ask all players if they want to play again
+            break
 
     
     def server_control(self):
@@ -119,6 +129,8 @@ class NetworkRunner:
                 print(SERVER_STOP_MSG)
                 self.save_game_state()
                 self.broadcast(SERVER_STOP_MSG)
+                self.game_interrupted = True
+                self.game.game_interrupted = self.game_interrupted
                 time.sleep(0.5) 
                 self.running = False
                 with self.start_condition:
@@ -245,6 +257,7 @@ class NetworkRunner:
                 if p.conn == conn:
                     print(f"[REMOVING PLAYER] {p.name}")
                     p.conn = None
+                    p.is_playing = False
                     break
 
             self.connected_players = len([c for c in self.connections])
@@ -264,7 +277,8 @@ class NetworkRunner:
                     print(msg)
                     self.broadcast(msg)
                     #TODO add some handling of the game state do not know rn
-                    self.running = False
+                    # self.game_interrupted = True
+                    # announce the winner
 
             self.start_condition.notify_all()
 
