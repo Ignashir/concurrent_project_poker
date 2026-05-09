@@ -1,7 +1,7 @@
 import socket
 from poker.network.utils import send_msg, recive_msg
 from poker.game_logic.action import ActionType
-from poker.runners.network_runner import HOST, PORT, WELCOME_MSG, REJECT_MSG, TIMEOUT_MSG,HEALTH_CHECK_PERIOD, SERVER_STOP_MSG
+from poker.runners.network_runner import HOST, PORT, WELCOME_MSG, REJECT_MSG, TIMEOUT_MSG,HEALTH_CHECK_PERIOD, SERVER_STOP_MSG, GAME_ENDED
 from poker.player.network_player import YOUR_TURN_MSG, AMOUNT_MSG
 import threading 
 from queue import Queue
@@ -200,7 +200,7 @@ class Client():
                 continue
 
 
-            if msg == SERVER_STOP_MSG:
+            if msg == SERVER_STOP_MSG or msg == GAME_ENDED:
                 print("[SERVER STOP]")
                 self.active.clear()
 

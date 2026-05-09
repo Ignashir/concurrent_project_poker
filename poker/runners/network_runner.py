@@ -15,7 +15,7 @@ TIMEOUT_MSG = "To much time has passed, we need to close the session"
 REJECT_MSG = "The lobby is full, you have been disconnected"
 WELCOME_MSG = "Welcome to the Console Texas Hold'em Game!"
 SERVER_STOP_MSG = "Stopping server..."
-
+GAME_ENDED = "The game had ended"
 
 from enum import Enum
 
@@ -78,7 +78,6 @@ class NetworkRunner:
         self.state = ServerState.GAME
         time.sleep(1)
         self.start_game()
-        self.state = ServerState.LOBBY
     
     def lobby_listener(self, player):
         conn = player.conn
@@ -109,15 +108,24 @@ class NetworkRunner:
             self.broadcast(WELCOME_MSG)
             winner = self.game.run_single_game()
             if winner == None:
-                return
+                return      
             self.game.brodcast_msg(
                 f"The winner is: {winner.name} with hand strength: "
                 f"{winner.hand.evaluate_hand(self.game.community_cards)[0].name}"
             )
-            #TODO ask all players if they want to play again
             break
+        self.broadcast(GAME_ENDED)
+        self.game_interrupted = True
+        self.game.game_interrupted = self.game_interrupted
+        time.sleep(1) 
+        self.running = False
+        with self.start_condition:
+            self.start_condition.notify_all()
+        time.sleep(1)
+        self.terminate_all_connections()
 
-    
+        self.server.close()
+
     def server_control(self):
         """Allows stopping server from console"""
         while True:
@@ -146,8 +154,8 @@ class NetworkRunner:
         for player in self.players:
             self.broadcast(f"{player.name} (Chips: {player.chips}, My Bet: {player.my_current_bet})")
         
-        for conn in self.connections:
-            self.handle_disconnect(conn)
+        for conn in list(self.connections):
+            self.handle_disconnect(conn, broadcast_status=False)
 
     
     def manage_client(self, conn, address):
@@ -248,7 +256,7 @@ class NetworkRunner:
                     print("[DISCONNECT] Player lost connection")
                     self.handle_disconnect(conn)
     
-    def handle_disconnect(self, conn):
+    def handle_disconnect(self, conn, broadcast_status=True):
         with self.start_condition:
             if conn in self.connections:
                 self.connections.remove(conn)
@@ -263,22 +271,25 @@ class NetworkRunner:
             self.connected_players = len([c for c in self.connections])
 
             active_players = [p for p in self.players if p.conn is not None]
-
-            if self.state == ServerState.LOBBY:
-                if len(active_players) <= 1:
-                    msg = "[LOBBY] Not enough players, waiting..."
-                    print(msg)
-                    self.broadcast(msg)
-                    self.ready_flag = False
+            if broadcast_status:
+                if self.state == ServerState.LOBBY:
+                    if len(active_players) <= 1:
+                        msg = "[LOBBY] Not enough players, waiting..."
+                        print(msg)
+                        self.broadcast(msg)
+                        self.ready_flag = False
 
             elif self.state == ServerState.GAME:
                 if len(active_players) <= 1:
                     msg = "[GAME] Only one player left → ending game"
                     print(msg)
                     self.broadcast(msg)
-                    #TODO add some handling of the game state do not know rn
-                    # self.game_interrupted = True
-                    # announce the winner
+
+                    self.game_interrupted = True
+                    self.game.game_interrupted = True
+                    self.running = False
+
+                    self.start_condition.notify_all()
 
             self.start_condition.notify_all()
 
