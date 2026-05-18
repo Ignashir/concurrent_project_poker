@@ -1,0 +1,30 @@
+{
+    "players": [
+        {
+            "name": "Player 1",
+            "chips": 0,
+            "bet": 1000,
+            "active": false
+        },
+        {
+            "name": "Player 2",
+            "chips": 0,
+            "bet": 1000,
+            "active": false
+        },
+        {
+            "name": "Player 3",
+            "chips": 3000,
+            "bet": 1000,
+            "active": true
+        }
+    ],
+    "pot": 0,
+    "community_cards": [
+        "SIX DIAMONDS",
+        "EIGHT HEARTS",
+        "QUEEN HEARTS",
+        "FIVE HEARTS",
+        "SIX CLUBS"
+    ]
+}
