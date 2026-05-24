@@ -10,7 +10,7 @@ import socket
 
 YOUR_TURN_MSG = "Your turn"
 AMOUNT_MSG = "AMOUNT?"
-TURN_TIMEOUT = 30 
+TURN_TIMEOUT = 3000 
 
 
 class NetworkPlayer(Player):

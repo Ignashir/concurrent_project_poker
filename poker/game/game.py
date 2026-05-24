@@ -71,7 +71,7 @@ class Game:
                     return False
                 new_total_bet = player.my_current_bet + action.amount
                 return (
-                    player.chips >= action.amount 
+                    player.chips >= action.amount
                     and new_total_bet > self.current_bet
                 )
             case ActionType.ALL_IN:
@@ -101,8 +101,7 @@ class Game:
             case ActionType.RAISE:
                 self.apply_raise(player, action.amount)
             case ActionType.ALL_IN:
-                all_in_amount = player.chips
-                self.apply_raise(player, all_in_amount)
+                self.apply_raise(player, player.chips)
             case ActionType.SMALL_BLIND:
                 amount = min(self.SMALL_BLIND, player.chips)
                 self.apply_raise(player, amount)
@@ -111,64 +110,56 @@ class Game:
                 self.apply_raise(player, amount)
 
     def betting_round(self):
-        to_act = {p.name for p in self.active_players() if p.chips > 0}
-        
-        if len(to_act) <= 1:
+        active = [p for p in self.active_players() if p.chips > 0]
+        if len(active) <= 1:
             return
+
+        to_act = list(active)
+        acted = set()
 
         while to_act:
             if self.game_interrupted:
-                return 
+                return
             if len(self.active_players()) <= 1:
                 break
-            current_player = self.get_next_player()
-            if current_player is None or current_player.name not in to_act:
-                if not any(name in to_act for name in [p.name for p in self.active_players()]):
-                    break
+
+            current_player = to_act.pop(0)
+
+            if not current_player.is_playing or current_player.chips == 0:
                 continue
 
             while True:
                 try:
                     if self.game_interrupted:
                         return
-                    if len(self.active_players()) <= 1:
-                        break
                     state = self.game_state.get_game_state
 
                     self.send_message_to_the_player(f"\nPot: {state['pot']} | Community: {state['community_cards']}", current_player)
+                    self.send_message_to_the_player(f"Your cards: {[str(c) for c in current_player.hand.cards]}", current_player)
                     self.send_message_to_the_player(f"Current Bet: {state['current_bet']}", current_player)
                     self.send_message_to_the_player(f"{current_player.name} (Chips: {current_player.chips}, My Bet: {current_player.my_current_bet})", current_player)
-                    
-                    old_bet = self.current_bet
-                    
-                    action = current_player.take_action(state)
-                
-                    if current_player.conn is None:
-                        current_player.is_playing = False
-                        to_act.discard(current_player.name)
-                        break
-                    else:
-                        self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
-                    
-                    self.apply_action(current_player, action)
-                                  
 
-                    if current_player.name in to_act:
-                        to_act.remove(current_player.name)
+                    old_bet = self.current_bet
+                    action = current_player.take_action(state)
+
+                    if self.mode == "network" and current_player.conn is None:
+                        current_player.is_playing = False
+                        break
+
+                    self.brodcast_msg(f"{current_player.name} performed: {action.action_type.name}")
+                    self.apply_action(current_player, action)
+                    acted.add(current_player.name)
 
                     if self.current_bet > old_bet:
                         for p in self.active_players():
-                            if p != current_player and p.chips > 0:
-                                to_act.add(p.name)
+                            if p.name != current_player.name and p.name not in [x.name for x in to_act] and p.chips > 0:
+                                to_act.append(p)
 
-                    if not current_player.is_playing:
-                        if current_player.name in to_act:
-                            to_act.remove(current_player.name)
-                            
                     break
                 except InvalidActionError as invalid:
                     print(f"Error: {invalid}")
                     self.send_message_to_the_player(f"INVALID MOVE: {invalid}", current_player)
+
             if len(self.active_players()) <= 1:
                 break
 
@@ -221,15 +212,18 @@ class Game:
         self.start_game()
         self.perform_initial_bets()
         self.deal_cards()
+        first_round = True
         for betting_round in BettingRound:
             if self.game_interrupted:
                 return None
+            if not first_round:
+                self._reset_betting_round()
+            first_round = False
             self.betting_round()
-
             if len(self.active_players()) <= 1:
                 break
             self.reveal_community_cards(betting_round)
-        
+
         winner = self.determine_winner()
         if winner:
             print(f"Winner: {winner.name} wins: {self.pot} chips!")
@@ -240,6 +234,11 @@ class Game:
             print("Error")
         return winner
     
+    def _reset_betting_round(self):
+        self.current_bet = 0
+        for player in self.players:
+            player.my_current_bet = 0
+        
     def send_message_to_the_player(self, msg: str, player: Player):
         if self.game_interrupted:
             return

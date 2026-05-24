@@ -8,11 +8,10 @@ class ActionType(Enum):
     FOLD = 1
     CHECK = 2
     CALL = 3
-    BET = 4
-    RAISE = 5
-    ALL_IN = 6
-    SMALL_BLIND = 7
-    BIG_BLIND = 8
+    RAISE = 4
+    ALL_IN = 5
+    SMALL_BLIND = 6
+    BIG_BLIND = 7
 
 class CardSuit(Enum):
     HEARTS = 1
