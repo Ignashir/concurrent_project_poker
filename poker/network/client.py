@@ -89,19 +89,28 @@ class Client():
                 self.send_msg_to_server(str(amount))
 
     def get_action_input(self):
-        while self.active.is_set(): 
-            print(self.possible_actions)
+        ACTIONS = {
+            1: ("Fold",   "resign from hand"),
+            2: ("Check",  "pass without betting"),
+            3: ("Call",   "match current bet"),
+            4: ("Raise",  "increase the bet (enter amount)"),
+            5: ("All-in", "go all-in"),
+        }
+
+        while self.active.is_set():
+            print("\n┌─ Your action ───────────────────────────┐")
+            for num, (name, desc) in ACTIONS.items():
+                print(f"│  {num}  {name:<8}  {desc}")
+            print("└─────────────────────────────────────────┘")
+            print("Enter number: ", end="", flush=True)
+
             cmd = self.get_next_command()
-
-            if cmd is None:
-                return None
-
-            if cmd == "quit":
+            if cmd is None or cmd == "quit":
                 return None
 
             try:
                 val = int(cmd)
-                if 1 <= val <= 6:
+                if 1 <= val <= 5:
                     return val
             except ValueError:
                 pass
