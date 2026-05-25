@@ -212,18 +212,23 @@ class Game:
         self.start_game()
         self.perform_initial_bets()
         self.deal_cards()
-        first_round = True
+
+        self.betting_round()
+        if len(self.active_players()) <= 1:
+            return self._finish_game()
+
         for betting_round in BettingRound:
             if self.game_interrupted:
                 return None
-            if not first_round:
-                self._reset_betting_round()
-            first_round = False
+            self.reveal_community_cards(betting_round)
+            self._reset_betting_round()
             self.betting_round()
             if len(self.active_players()) <= 1:
                 break
-            self.reveal_community_cards(betting_round)
 
+        return self._finish_game()
+
+    def _finish_game(self) -> Player:
         winner = self.determine_winner()
         if winner:
             print(f"Winner: {winner.name} wins: {self.pot} chips!")
@@ -233,7 +238,7 @@ class Game:
         else:
             print("Error")
         return winner
-    
+
     def _reset_betting_round(self):
         self.current_bet = 0
         for player in self.players:
